@@ -4,13 +4,6 @@ import threading
 import os
 from hasher import Hasher
 
-# Default file extensions for scanning
-DEFAULT_EXTENSIONS = [
-    '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp', '.svg',
-    '.pdf', '.docx', '.xlsx', '.pptx', '.txt', '.csv', '.mp3', '.wav',
-    '.mp4', '.avi', '.mkv'
-]
-
 class DuplicateRemoverGUI:
     def __init__(self):
         self.root = tk.Tk()
@@ -24,8 +17,7 @@ class DuplicateRemoverGUI:
         self.hasher = Hasher(chunk_size=1024 * 1024)
         self.selected_directory = tk.StringVar()
         self.is_processing = False
-        self.extensions = DEFAULT_EXTENSIONS.copy()
-        self.stop_event = threading.Event()  # Event to signal stopping
+        self.extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp', '.svg', '.pdf', '.docx', '.xlsx', '.pptx', '.txt', '.csv', '.mp3', '.wav', '.mp4', '.avi', '.mkv']
 
         self.setup_ui()
         self.center_window()
@@ -66,19 +58,19 @@ class DuplicateRemoverGUI:
                                   font=("Arial", 10), width=60)
         self.entry_dir.grid(row=0, column=0, sticky=(tk.W, tk.E), padx=(0, 10))
         
-        self.extension_var = tk.StringVar(value="")
+        # Browse button
+        self.btn_browse = ttk.Button(dir_frame, text="📂 Browse", 
+                                    command=self.browse_directory, width=12)
+        self.btn_browse.grid(row=0, column=1)
+        
+        # dropdown for file extensions
+        
+        self.extension_var = tk.StringVar(value=self.extensions)
         self.extension_dropdown = ttk.Combobox(dir_frame, textvariable=self.extension_var,
                                                values=self.extensions, state="readonly", 
                                                width=50, font=("Arial", 10))
         self.extension_dropdown.grid(row=1, column=0, columnspan=2, pady=(10, 0))
-        # dropdown for file extensions
-        
-        self.extension_var = tk.StringVar(value=",".join(self.extensions))
-        self.extension_dropdown = ttk.Combobox(dir_frame, textvariable=self.extension_var,
-                                               values=[",".join(self.extensions)], state="normal", 
-                                               width=50, font=("Arial", 10))
-        self.extension_dropdown.grid(row=1, column=0, columnspan=2, pady=(10, 0))
-        self.extension_dropdown.set(",".join(self.extensions))
+        self.extension_dropdown.set("Select file extensions to scan")
 
         # Action buttons frame
         action_frame = ttk.Frame(main_frame)
@@ -153,7 +145,6 @@ class DuplicateRemoverGUI:
         # Disable buttons and start progress
         self.set_processing_state(True)
         self.results_text.delete(1.0, tk.END)
-        self.stop_event.clear()  # Reset stop event before starting scan
         
         # Run scan in separate thread to prevent UI freezing
         # use many threads to handle long-running tasks
@@ -163,12 +154,12 @@ class DuplicateRemoverGUI:
     def stop_scan(self):
         """Stop the current scan if running"""
         if self.is_processing:
-            self.stop_event.set()  # Signal the worker to stop
             self.set_processing_state(False)
             self.update_status("Scan stopped by user.")
             messagebox.showinfo("Scan Stopped", "The scan has been stopped.")
         else:
             messagebox.showinfo("No Scan Running", "No scan is currently in progress.")
+
 
 
     def _scan_worker(self, directory):
@@ -177,16 +168,7 @@ class DuplicateRemoverGUI:
             self.update_status("Scanning files by size...")
             # send the chosen extension to the hasher 
 
-            extensions = [ext.strip() for ext in self.extension_var.get().split(',') if ext.strip()]
-            # Check for stop event before starting
-            if self.stop_event.is_set():
-                self.root.after(0, self._scan_complete, [], "Scan stopped by user.")
-                return
-
-            duplicates_on_size = self.hasher.find_duplicates_on_size(directory, extensions)
-            if self.stop_event.is_set():
-                self.root.after(0, self._scan_complete, [], "Scan stopped by user.")
-                return
+            duplicates_on_size = self.hasher.find_duplicates_on_size(directory, self.extension_var.get().split(','))
         
             if not duplicates_on_size:
                 self.root.after(0, self._scan_complete, [], "No duplicate files found based on size, no duplicates found.")
@@ -194,14 +176,12 @@ class DuplicateRemoverGUI:
                 
             self.update_status("Analyzing file contents for similar content on equal size...")
             duplicates_on_hash = self.hasher.hash_duplicates(duplicates_on_size)
-            if self.stop_event.is_set():
-                self.root.after(0, self._scan_complete, [], "Scan stopped by user.")
-                return
             
             self.root.after(0, self._scan_complete, duplicates_on_hash, None)
             
         except Exception as e:
             self.root.after(0, self._scan_error, str(e))
+            
     def _scan_complete(self, duplicate_groups, message):
         """Handle scan completion"""
         self.duplicate_groups = duplicate_groups
