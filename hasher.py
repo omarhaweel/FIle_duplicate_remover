@@ -18,13 +18,15 @@ class Hasher:
             print(f"Error reading file: {e}")
         return sha256.hexdigest()
     
-    def find_duplicates_on_size(self, main_directory):
+    def find_duplicates_on_size(self, main_directory, extension):
         size_dict = {}
         duplicates = []
 
         try:
             for root, _, files in os.walk(main_directory):
                 for file in files:
+                    if not any(file.lower().endswith(ext) for ext in extension):
+                        continue
                     file_path = os.path.join(root, file)
                     if not os.path.isfile(file_path):
                         continue
